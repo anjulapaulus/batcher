@@ -2,11 +2,15 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"testing"
 )
 
 func DummyBatchFn1(workerID int, data []interface{}) {
 	fmt.Println(workerID, data)
+	for _,v := range data{
+		log.Println(v)
+	}
 }
 
 type batch struct {
