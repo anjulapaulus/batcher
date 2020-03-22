@@ -40,7 +40,6 @@ func NewBatcher(size int, waitTime time.Duration, numWorkers int, funct Function
 	batch.worker(numWorkers)
 
 	go batch.autoDump()
-	go batch.timeout()
 
 	return batch, nil
 }
@@ -53,9 +52,6 @@ func (b *BatchConfig) Insert(item interface{}) bool {
 		b.items = append(b.items, item)
 		return true
 	}
-	//if len(b.items) == b.size {
-	//	b.dump()
-	//}
 
 	return false
 }
@@ -75,6 +71,8 @@ func (b *BatchConfig) dump() {
 func (b *BatchConfig) autoDump() {
 	if len(b.items) == b.size {
 		b.dump()
+	}else {
+		b.timeout()
 	}
 }
 
