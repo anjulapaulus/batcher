@@ -4,18 +4,18 @@ import (
 	"fmt"
 	"log"
 	"testing"
+	"time"
 )
 
 func DummyBatchFn1(workerID int, data []interface{}) {
-	fmt.Println(workerID, data)
-	for _,v := range data{
-		log.Println(v)
+	for _,v  := range  data{
+		log.Println(fmt.Sprintf("[WokerID]: %d [data]: %d",workerID, v))
 	}
 }
 
 type batch struct {
 	size       int
-	waitTime   int64
+	waitTime   time.Duration
 	numWorkers int
 	funct      Function
 }
@@ -27,7 +27,7 @@ func TestNewBatcher(t *testing.T) {
 	}{
 		{batch{
 			size:       0,
-			waitTime:   1,
+			waitTime:   1*time.Second,
 			numWorkers: 1,
 			funct:      DummyBatchFn1,
 		}, false,
@@ -35,7 +35,7 @@ func TestNewBatcher(t *testing.T) {
 		{
 			batch{
 				size:       1,
-				waitTime:   0,
+				waitTime:   0*time.Second,
 				numWorkers: 1,
 				funct:      DummyBatchFn1,
 			}, false,
@@ -43,7 +43,7 @@ func TestNewBatcher(t *testing.T) {
 		{
 			batch{
 				size:       1,
-				waitTime:   1,
+				waitTime:   1*time.Second,
 				numWorkers: 0,
 				funct:      DummyBatchFn1,
 			}, false,
@@ -51,7 +51,7 @@ func TestNewBatcher(t *testing.T) {
 		{
 			batch{
 				size:       1,
-				waitTime:   15,
+				waitTime:   15*time.Second,
 				numWorkers: 1,
 				funct:      DummyBatchFn1,
 			}, true,
@@ -77,13 +77,14 @@ func TestNewBatcher(t *testing.T) {
 }
 
 func TestBatchConfig_Insert(t *testing.T) {
-	batch, err := NewBatcher(2,60,1, DummyBatchFn1)
+	batch, err := NewBatcher(10,3,2, DummyBatchFn1)
 	if err !=nil{
 		t.Error("Failed: Insert Function Test : New Batcher")
 	}
-	for i:=1; i<=2; i++ {
-		insert := batch.Insert(i)
-		if insert != true {
+	for i:=1; i<=10; i++ {
+		check := batch.Insert(i)
+
+		if check != true {
 			t.Error("Failed: Insert Function Test")
 		}
 	}

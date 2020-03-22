@@ -19,7 +19,7 @@ type BatchConfig struct {
 var mutex = &sync.Mutex{}
 
 //Initialises a new instance
-func NewBatcher(size int, waitTime int64, numWorkers int, funct Function) (b *BatchConfig, err error) {
+func NewBatcher(size int, waitTime time.Duration, numWorkers int, funct Function) (b *BatchConfig, err error) {
 
 	switch {
 	case size <= 0:
@@ -32,47 +32,50 @@ func NewBatcher(size int, waitTime int64, numWorkers int, funct Function) (b *Ba
 
 	batch := &BatchConfig{
 		size:      size,
-		WaitTime:  time.Duration(waitTime) * time.Second,
+		WaitTime:  waitTime,
 		Func:      funct,
-		items:     make([]interface{}, 0),
+		items:     make([]interface{}, 0), //initialize empty slice
 		batchChan: make(chan []interface{}, numWorkers),
 	}
 	batch.worker(numWorkers)
 
 	go batch.autoDump()
-
 	go batch.timeout()
 
 	return batch, nil
 }
+
 //This function helps to insert item to array
-func (b *BatchConfig) Insert(item interface{}) bool{
+func (b *BatchConfig) Insert(item interface{}) bool {
+	mutex.Lock()
+	defer mutex.Unlock()
 	if len(b.items) < b.size {
-		mutex.Lock()
 		b.items = append(b.items, item)
-		mutex.Unlock()
 		return true
 	}
+	//if len(b.items) == b.size {
+	//	b.dump()
+	//}
+
 	return false
 }
 
-//This function helps to auto dump when the items reach size.
-func (b *BatchConfig) autoDump(){
-	if len(b.items) == b.size {
+
+func (b *BatchConfig) dump() {
+	copiedItems := make([]interface{},len(b.items))
+	if len(b.items) != 0 {
 		mutex.Lock()
-		b.dump()
+		copy(copiedItems,b.items)
+		b.items = b.items[:0]
+		b.batchChan <- copiedItems
 		mutex.Unlock()
 	}
 }
 
-func (b *BatchConfig) dump() {
-	data := make([]interface{}, len(b.items))
-
-	for id, item := range b.items {
-		data[id] = item
+func (b *BatchConfig) autoDump() {
+	if len(b.items) == b.size {
+		b.dump()
 	}
-	b.items = b.items[:0]
-	b.batchChan <- data
 }
 
 //This function heps to with timeout dump
@@ -80,12 +83,8 @@ func (b *BatchConfig) timeout() {
 	ticker := time.NewTicker(b.WaitTime)
 	for {
 		select {
-		case <-ticker.C:
-			mutex.Lock()
-			if len(b.items) != 0  {
+		case <- ticker.C:
 				b.dump()
-			}
-			mutex.Unlock()
 		}
 	}
 }

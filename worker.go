@@ -1,23 +1,24 @@
 package batcher
 
 import (
+	"fmt"
 	"sync"
 )
 
 var wg sync.WaitGroup
 
 func (b *BatchConfig) worker (workerCount int){
-	for i := 0; i < workerCount; i++ {
-		wg.Add(1)
-		go func(workerId int, workers <- chan []interface{}){
-			for work := range workers{
-				b.Func(i,work)
+	for i := 1; i < workerCount; i++ {
+		go func(workerID int, flushJobs <-chan []interface{}) {
+			for j := range flushJobs {
+				fmt.Println(j)
+				b.Func(workerID,j)
 			}
-			wg.Done()
 		}(i, b.batchChan)
 
 	}
 }
+
 
 
 
