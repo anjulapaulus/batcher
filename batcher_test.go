@@ -68,20 +68,6 @@ func TestNewBatcher(t *testing.T) {
 
 }
 
-func BenchmarkNewBatcher(b *testing.B) {
-	ba := batch{
-		size:       1,
-		waitTime:   15*time.Second,
-		numWorkers: 1,
-		funct:      DummyBatchFn1,
-	}
-	for i :=0; i<b.N; i++ {
-		_,err :=NewBatcher(ba.size,ba.waitTime,ba.funct)
-		if err !=nil{
-			b.Error("[ERROR]: NewBatcher function - Benchmarks")
-		}
-	}
-}
 
 func TestBatchConfig_Insert(t *testing.T) {
 	batch,err := NewBatcher(60, 10*time.Millisecond, DummyBatchFn1)
@@ -99,10 +85,16 @@ func TestBatchConfig_Insert(t *testing.T) {
 	}
 }
 
-func TestBatchConfig_InsertItems(t *testing.T) {
-	_, err := NewBatcher(10, 10*time.Millisecond, DummyBatchFn1)
 
+func TestBatchConfig_InsertItems(t *testing.T) {
+	batch, err := NewBatcher(10, 10*time.Millisecond, DummyBatchFn1)
+	arr:=[]interface{}{1,2,3}
 	if err != nil{
 		t.Error("[ERROR]: NewBatcher function - Insert")
 	}
+	_, err =batch.InsertItems(arr)
+	if err != nil{
+		t.Error("[ERROR]: Insert function")
+	}
 }
+
