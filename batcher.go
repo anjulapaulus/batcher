@@ -6,83 +6,107 @@ import (
 	"time"
 )
 
-type Function func(workerID int, data []interface{})
+type Function func(data []interface{}) bool
 
 type BatchConfig struct {
-	size      int
-	WaitTime  time.Duration
-	Func      Function
-	items     []interface{}
-	batchChan chan []interface{}
+	MaxCapacity       int
+	WaitTime   time.Duration
+	function   Function
+	batchChan  chan interface{}
+	mutex      sync.RWMutex
 }
 
-var mutex = &sync.Mutex{}
-
 //Initialises a new instance
-func NewBatcher(size int, waitTime time.Duration, numWorkers int, funct Function) (b *BatchConfig, err error) {
-
+func NewBatcher(maxJobs int, waitTime time.Duration, f Function) (*BatchConfig, error) {
 	switch {
-	case size <= 0:
+	case maxJobs <= 0:
 		return &BatchConfig{}, errors.New("invalid size")
 	case waitTime <= 0:
 		return &BatchConfig{}, errors.New("invalid wait time")
-	case numWorkers <= 0:
-		return &BatchConfig{}, errors.New("invalid number of workers")
 	}
 
-	batch := &BatchConfig{
-		size:      size,
-		WaitTime:  waitTime,
-		Func:      funct,
-		items:     make([]interface{}, 0), //initialize empty slice
-		batchChan: make(chan []interface{}, numWorkers),
-	}
-	batch.worker(numWorkers)
 
-	go batch.autoDump()
-
-	return batch, nil
+	return &BatchConfig{
+		MaxCapacity:  maxJobs,
+		WaitTime: waitTime,
+		function: f,
+	}, nil
 }
 
-//This function helps to insert item to array
-func (b *BatchConfig) Insert(item interface{}) bool {
-	mutex.Lock()
-	defer mutex.Unlock()
-	if len(b.items) < b.size {
-		b.items = append(b.items, item)
-		return true
+//This function helps to insert an item
+func (b *BatchConfig) Insert(item interface{}) (bool, error) {
+	if item == nil {
+		return false, errors.New("item inserted is null")
 	}
 
-	return false
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
+	if b.batchChan == nil {
+		b.batchChan = make(chan interface{}, b.MaxCapacity)
+		go b.dumper()
+	}
+
+	b.batchChan <- item
+
+	return true, nil
+}
+
+func (b *BatchConfig) InsertItems(items []interface{}) (bool, error) {
+	if items == nil {
+		return false, errors.New("items inserted is null")
+	}
+
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
+	batchLen := len(items)
+	// If the length of batch is larger than maxCapacity
+	if batchLen > b.MaxCapacity {
+		items = items[:b.MaxCapacity]
+	}
+
+	if b.batchChan == nil {
+		b.batchChan = make(chan interface{}, b.MaxCapacity)
+		go b.dumper()
+	}
+
+	for _, item := range items {
+		b.batchChan <- item
+	}
+	return true, nil
 }
 
 
-func (b *BatchConfig) dump() {
-	copiedItems := make([]interface{},len(b.items))
-	if len(b.items) != 0 {
-		mutex.Lock()
-		copy(copiedItems,b.items)
-		b.items = b.items[:0]
-		b.batchChan <- copiedItems
-		mutex.Unlock()
-	}
-}
 
-func (b *BatchConfig) autoDump() {
-	if len(b.items) == b.size {
-		b.dump()
-	}else {
-		b.timeout()
-	}
-}
 
-//This function heps to with timeout dump
-func (b *BatchConfig) timeout() {
-	ticker := time.NewTicker(b.WaitTime)
+func (b *BatchConfig) dumper() {
+	var batch []interface{}
+	timer := time.NewTimer(b.WaitTime)
+
 	for {
 		select {
-		case <- ticker.C:
-				b.dump()
+		case <-timer.C:
+			b.function(batch)
+			b.close()
+			return
+		case item := <-b.batchChan:
+			batch = append(batch, item)
+			if len(batch) >= b.MaxCapacity {
+				// Callback with batch
+				b.function(batch)
+				// Init batch array
+				batch = []interface{}{}
+			}
 		}
+	}
+}
+
+func (b *BatchConfig) close() {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	if b.batchChan != nil {
+		close(b.batchChan)
+		b.batchChan = nil
 	}
 }

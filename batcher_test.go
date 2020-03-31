@@ -1,16 +1,14 @@
 package batcher
 
 import (
-	"fmt"
-	"log"
 	"testing"
 	"time"
 )
 
-func DummyBatchFn1(workerID int, data []interface{}) {
-	for _,v  := range  data{
-		log.Println(fmt.Sprintf("[WokerID]: %d [data]: %d",workerID, v))
-	}
+
+
+func DummyBatchFn1(data []interface{}) bool{
+	return true
 }
 
 type batch struct {
@@ -59,34 +57,52 @@ func TestNewBatcher(t *testing.T) {
 	}
 
 	for _, tt := range newBatcherTest {
-		_, err := NewBatcher(tt.batch.size, tt.batch.waitTime, tt.batch.numWorkers, tt.batch.funct)
+		 _,err :=NewBatcher(tt.batch.size, tt.batch.waitTime,tt.batch.funct)
+		 if err!= nil{
+		 	if tt.response != false{
+		 		t.Error("[ERROR]: NewBatcher function")
+			}
+		 }
 
-		if err != nil {
-			response := false
-			if response != tt.response {
-				t.Error("Failed: NewBatcher Test")
-			}
-		} else {
-			response := true
-			if response != tt.response {
-				t.Error("Failed: NewBatcher Test")
-			}
-		}
 	}
 
 }
 
-func TestBatchConfig_Insert(t *testing.T) {
-	batch, err := NewBatcher(10,3,2, DummyBatchFn1)
-	if err !=nil{
-		t.Error("Failed: Insert Function Test : New Batcher")
+func BenchmarkNewBatcher(b *testing.B) {
+	ba := batch{
+		size:       1,
+		waitTime:   15*time.Second,
+		numWorkers: 1,
+		funct:      DummyBatchFn1,
 	}
-	for i:=1; i<=10; i++ {
-		check := batch.Insert(i)
-
-		if check != true {
-			t.Error("Failed: Insert Function Test")
+	for i :=0; i<b.N; i++ {
+		_,err :=NewBatcher(ba.size,ba.waitTime,ba.funct)
+		if err !=nil{
+			b.Error("[ERROR]: NewBatcher function - Benchmarks")
 		}
 	}
+}
 
+func TestBatchConfig_Insert(t *testing.T) {
+	batch,err := NewBatcher(60, 10*time.Millisecond, DummyBatchFn1)
+
+	if err != nil{
+		t.Error("[ERROR]: NewBatcher function - Insert")
+	}
+
+	for i:=1; i<=1000; i++ {
+		_, err :=batch.Insert(i)
+		if err != nil{
+			t.Error("[ERROR]: Insert function")
+		}
+
+	}
+}
+
+func TestBatchConfig_InsertItems(t *testing.T) {
+	_, err := NewBatcher(10, 10*time.Millisecond, DummyBatchFn1)
+
+	if err != nil{
+		t.Error("[ERROR]: NewBatcher function - Insert")
+	}
 }
